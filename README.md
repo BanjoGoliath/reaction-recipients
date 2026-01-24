@@ -1,2 +1,8 @@
 # Reaction Recipients
-Python script that uses a Discord Chat Exporter to find every message with relevant reactions
+Flask app that uses a Discord Chat Exporter to find and display every message with relevant reactions.
+
+Run using:
+```
+python3 -m flask run
+```
+and follow terminal instructions to initialise the app.
