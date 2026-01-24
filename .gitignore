@@ -1,5 +1,7 @@
-*.json
+filters.json
 .venv
 .idea
 __pycache__
 data/
+static/*
+!static/chatlog.css

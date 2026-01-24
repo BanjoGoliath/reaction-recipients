@@ -11,6 +11,7 @@
             integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
             crossorigin="anonymous"
         />
+        <link rel="stylesheet" href="{{ url_for('static', filename='chatlog.css') }}" />
     </head>
 
     <body style="background-color: #25252a" data-bs-theme="dark">
@@ -55,7 +56,53 @@
 
         <div class="p-4">
             {% if filtered_message_data %}
-                TODO
+            {% for msg in filtered_message_data %}
+                <div class="chatlog__message-group">
+                    <div id="chatlog__message-container-{{ msg.message_id }}" class="chatlog__message-container" data-message-id="{{ msg.message_id }}">
+                        <div class="chatlog__message">
+                            <div class="chatlog__message-primary">
+                                <div class="chatlog__header">
+                                    <span class="chatlog__author">{{ msg.author_name }}</span>
+
+                                    <span class="chatlog__server-channel">
+                                        in <strong>{{ msg.server }}</strong> &gt; <strong>{{ msg.channel }}</strong>
+                                    </span>
+
+                                    <span class="chatlog__timestamp" title="{{ msg.timestamp.strftime('%B %d, %Y %I:%M %p') }}">
+                                        {{ msg.timestamp.strftime('%m/%d/%Y %I:%M %p') }}
+                                    </span>
+                                </div>
+
+                                <div class="chatlog__content chatlog__markdown row">
+                                    <span class="chatlog__markdown-preserve">{{ msg.content }}</span>
+                                    {% if msg.has_attachments %}
+                                        {% for content in msg.probable_content %}
+                                            <iframe src="{{ content }}" class="p-3" style="width: 864px; height: 480px; background-color: black"></iframe>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+
+                                <div class="chatlog__reaction-info">
+                                    <span class="chatlog__reaction-count">
+                                        {{ msg.reacted_count }} filtered reaction{{ "s" if msg.reacted_count != 1 else "" }}.
+                                        {% if msg.additional_reactions_present %}Other reactions present.{% endif %}
+                                        {% if msg.has_attachments %}Attachments present.{% endif %}
+                                    </span>
+                                </div>
+
+                                <div class="chatlog__message-link">
+                                    <a href="{{ msg.probable_content[0] }}" target="_blank" class="px-3">
+                                        Try to open content →
+                                    </a>
+                                    <a href="https://discord.com/channels/{{ msg.guild_id }}/{{ msg.channel_id }}/{{ msg.message_id }}" target="_blank">
+                                        Open original message →
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
             {% else %}
                 No messages are available under the current filter settings across {{ files_loaded }} channel(s).
             {% endif %}

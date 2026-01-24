@@ -1,8 +1,9 @@
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, redirect, render_template
+from flask import Flask, redirect, render_template, url_for
 
 from logger import dbg
 
@@ -27,7 +28,9 @@ with filters_file.open("r+") as file:
         dbg.warning("Could not read and parse from filters.json, overwriting with defaults.")
         file.seek(0)
         file.truncate()
-        json.dump([{"name": "fire", "unicode": "🔥"}, {"name": "cd", "unicode": "💿"}, {"name": "dvd", "unicode": "📀"}], file)
+        defaults = [{"name": "fire", "unicode": "🔥"}, {"name": "cd", "unicode": "💿"}, {"name": "dvd", "unicode": "📀"}]
+        json.dump(defaults, file)
+        filters = defaults
     
 data_dir = Path.cwd() / "data"
 try:
@@ -92,27 +95,59 @@ dbg.debug(f"Loaded {len(files)} file(s). Starting Flask server.")
 @app.route("/<filter>")
 def index(filter):
     if filter is not None and filter not in map(lambda f: f["name"], filters):
-        dbg.warning(f"Filter '{filter}' does not exist, clearing.")
         return redirect("/")
     filtered_message_data = get_filtered_message_data(filter, files)
     return render_template("index.html", files_loaded=len(files), filters=filters, active_filter_name=filter, filtered_message_data=filtered_message_data)
+
+@app.route("/<dir>/<file>") # should be fine for directory then file located items
+def static_content(dir, file):
+    return redirect(url_for("static", filename=f"{dir}/{file}"))
+
+@app.errorhandler(404)
+def file_not_found(e):
+    return render_template("404.html"), 404
 
 @dataclass
 class ReactedMessage:
     server: str # for DMs using Direct Messages
     channel: str # for DMs use GC or DM name
-    # TODO: replicate DiscordChatExporter styles here in Flask and expose appropriate data through this data class
+    guild_id: str
+    channel_id: str
+    message_id: str
+    author_name: str # no pfp as we just use JSON
+    content: str # any renderable text content
+    probable_content: list[str] # best guess(es) to some content we can render with the message. e.g messages with single attachments which we can find
+    has_attachments: bool
+    timestamp: datetime # content post, not bothering about edit
+    reacted_count: int # targetted reaction filter #, usually 1
+    additional_reactions_present: bool # whether to note other reactions are present on the message
 
 
 def get_filtered_message_data(filter: str, files: list):
     matched_reacted_messages: list[ReactedMessage] = []
     for file in files:
         try:
-            pass # TODO
+            for message in file["messages"]:
+                if not message["reactions"]:
+                    pass
+
+                for reaction in message["reactions"]:
+                    if reaction["emoji"]["code"].lower() == filter.lower():
+                        matched_reacted_messages.append(
+                            ReactedMessage(file["guild"]["name"], file["channel"]["name"], "@me" if (gid := file["guild"]["id"]) == "0" else gid, file["channel"]["id"], message["id"], message["author"]["nickname"], message["content"], try_get_probable_content(message), not not message["attachments"], datetime.fromisoformat(message["timestamp"]), reaction["count"], len(message["reactions"]) > 1)
+                        )
         except Exception as e:
-            dbg.error(f"Malformed data in '{file}' searching for filter '{filter}'. Ignoring error: {e}")
+            dbg.error(f"Malformed data searching for filter '{filter}'. Ignoring error: {e}")
     return matched_reacted_messages
 
+def try_get_probable_content(message):
+    try:
+        # all attachments available. also this will just auto play videos or download files since we use an iframe internally but thats fine. funnier.
+        # ideally we check the file type and render img or video appropriately.
+        return list(map(lambda x: x["url"], message["attachments"])) or [message["content"]]
+    except:
+        return [message["content"]]
+    
 # bango land
 # fire = []
 # disc = []
