@@ -4,3 +4,5 @@ filters.json
 __pycache__
 static/*
 !static/chatlog.css
+!static/404.png
+!static/none.png

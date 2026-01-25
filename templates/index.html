@@ -119,7 +119,7 @@
                                 <div class="chatlog__message">
                                     <div class="chatlog__message-primary">
                                         <div class="d-flex">
-                                            <img class="chatlog__author-pfp" src="{{ msg.author_pfp }}" />
+                                            <img class="chatlog__author-pfp" src="{{ msg.author_pfp }}" onerror="this.onerror=null; this.src='/static/none.png';" />
                                             <div>
                                                 <div class="chatlog__header">
                                                     <span class="chatlog__author">{{ msg.author_name }}</span>
@@ -143,11 +143,11 @@
                                                         {% set ext = url.split(".")[-1].split("?")[0].lower() %}
                                                         {% if ext in ["jpg", "jpeg", "png", "gif", "webp"] %}
                                                             <a href="{{ url }}" target="_blank">
-                                                                <img src="{{ url }}" alt="{{ url }}" class="autoscale rounded" />
+                                                                <img src="{{ url }}" alt="{{ url }}" class="autoscale rounded" onerror="this.onerror=null; this.src='/static/404.png';" />
                                                             </a>
                                                         {% elif ext in ["mp4", "webm", "mov"] %}
                                                             <video controls src="{{ url }}" class="autoscale rounded"></video>
-                                                        {% elif ext in ["mp3", "wav", "flac"] %}
+                                                        {% elif ext in ["mp3", "wav", "ogg"] %}
                                                             <audio controls src="{{ url }}" title="{{ url }}" class="rounded"></audio>
                                                         {% else %}
                                                             <a href="{{ url }}" target="_blank" rel="noreferrer" class="url">
