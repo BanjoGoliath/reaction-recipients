@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, redirect, render_template, url_for
+from flask import Flask, redirect, render_template, request, url_for
 
 from logger import dbg
 
@@ -32,12 +32,12 @@ with filters_file.open("r+") as file:
         json.dump(defaults, file)
         filters = defaults
     
-data_dir = Path.cwd() / "data"
+data_dir = Path.cwd() / "static" / "data"
 try:
     data_dir.mkdir(parents=True)
-    dbg.info("New data directory created under ./data")
+    dbg.info("New data directory created under ./static/data")
 except FileExistsError:
-    dbg.debug("Data directory located and will be used under ./data")
+    dbg.debug("Data directory located and will be used under ./static/data")
 
 dbg.debug("Looking for compatible files.")
 json_files = []
@@ -52,7 +52,7 @@ for path in sorted(data_dir.rglob("*")):
 print()
 
 if len(json_files) == 0:
-    dbg.fatal("No .json files were found in the ./data directory to use for reaction-recipients.\nPlease populate ./data with json (and optionally directory/folder assorted) exports from DiscordChatExporter.")
+    dbg.fatal("No .json files were found in the ./static/data directory to use for reaction-recipients.\nPlease populate ./static/data with json (and optionally directory/folder assorted) exports from DiscordChatExporter.\nImage/media folders for exports should be dropped directly into ./static")
     exit(1)
     
 files = []
@@ -96,8 +96,33 @@ dbg.debug(f"Loaded {len(files)} file(s). Starting Flask server.")
 def index(filter):
     if filter is not None and filter not in map(lambda f: f["name"], filters):
         return redirect("/")
-    filtered_message_data = get_filtered_message_data(filter, files)
+    filtered_message_data = get_filtered_message_data(filter, files) if filter is not None else []
     return render_template("index.html", files_loaded=len(files), filters=filters, active_filter_name=filter, filtered_message_data=filtered_message_data)
+
+@app.route("/change_filters", methods=["POST"])
+def change_filters():
+    global filters
+    new_filter_names = set()
+    for filter in request.form:
+        new_filter_names.add(filter.strip().replace(" ", "_"))
+    new_filters = []
+    for code in new_filter_names:
+        new_filters.append({"name": code, "unicode": try_get_emoji(code)})
+    filters = new_filters
+    with filters_file.open("w") as file:
+        json.dump(new_filters, file)
+    return redirect("/")
+
+def try_get_emoji(code):
+    try:
+        for file in files:
+            for message in file["messages"]:
+                for reaction in message["reactions"]:
+                    if reaction["emoji"]["code"] == code:
+                        return reaction["emoji"]["name"]
+    except:
+        return code
+    return code
 
 @app.route("/<dir>/<file>") # should be fine for directory then file located items
 def static_content(dir, file):
@@ -114,10 +139,10 @@ class ReactedMessage:
     guild_id: str
     channel_id: str
     message_id: str
-    author_name: str # no pfp as we just use JSON
+    author_name: str
+    author_pfp: str # link similar to attachment but more sophisticated and image-like
     content: str # any renderable text content
-    probable_content: list[str] # best guess(es) to some content we can render with the message. e.g messages with single attachments which we can find
-    has_attachments: bool
+    attachment_urls: list[str] # can be empty
     timestamp: datetime # content post, not bothering about edit
     reacted_count: int # targetted reaction filter #, usually 1
     additional_reactions_present: bool # whether to note other reactions are present on the message
@@ -128,25 +153,26 @@ def get_filtered_message_data(filter: str, files: list):
     for file in files:
         try:
             for message in file["messages"]:
-                if not message["reactions"]:
-                    pass
-
                 for reaction in message["reactions"]:
                     if reaction["emoji"]["code"].lower() == filter.lower():
                         matched_reacted_messages.append(
-                            ReactedMessage(file["guild"]["name"], file["channel"]["name"], "@me" if (gid := file["guild"]["id"]) == "0" else gid, file["channel"]["id"], message["id"], message["author"]["nickname"], message["content"], try_get_probable_content(message), not not message["attachments"], datetime.fromisoformat(message["timestamp"]), reaction["count"], len(message["reactions"]) > 1)
+                            ReactedMessage(
+                                file["guild"]["name"],
+                                file["channel"]["name"],
+                                "@me" if (gid := file["guild"]["id"]) == "0" else gid,
+                                file["channel"]["id"],
+                                message["id"],
+                                message["author"]["nickname"],
+                                message["author"]["avatarUrl"],
+                                message["content"],
+                                list(map(lambda x: x["url"], message["attachments"])),
+                                datetime.fromisoformat(message["timestamp"]),
+                                reaction["count"], len(message["reactions"]) > 1
+                            )
                         )
         except Exception as e:
             dbg.error(f"Malformed data searching for filter '{filter}'. Ignoring error: {e}")
     return matched_reacted_messages
-
-def try_get_probable_content(message):
-    try:
-        # all attachments available. also this will just auto play videos or download files since we use an iframe internally but thats fine. funnier.
-        # ideally we check the file type and render img or video appropriately.
-        return list(map(lambda x: x["url"], message["attachments"])) or [message["content"]]
-    except:
-        return [message["content"]]
     
 # bango land
 # fire = []

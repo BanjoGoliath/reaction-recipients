@@ -12,14 +12,37 @@
             crossorigin="anonymous"
         />
         <link rel="stylesheet" href="{{ url_for('static', filename='chatlog.css') }}" />
+        <script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/dompurify@3.3.1/dist/purify.min.js"></script>
     </head>
 
     <body style="background-color: #25252a" data-bs-theme="dark">
-        <header class="text-white py-2" style="background-color: #212121">
-            <div class="container text-center">
+        <header class="text-white sticky-top">
+            <div class="container text-center py-1 w-100" style="background-color: #212121; border-radius: 0 0 24px 24px;">
                 <span>
                     {{ files_loaded }} channel(s) loaded.
                     <a href="#" style="color: #0080ff" data-bs-toggle="modal" data-bs-target="#filters">Edit filters</a>
+                </span>
+            </div>
+            <div id="buttons" class="p-2 col d-flex align-items-center justify-content-between gap-2">
+                <div>
+                    {% if not filters %}
+                        <i>Nil filters.</i>
+                    {% endif %}
+                    {% for filter in filters %}
+                        {% if active_filter_name == filter.name %}
+                            <button type="button" class="btn btn-primary my-1">{{ filter.unicode }}</button>
+                        {% else %}
+                            <a href="/{{ filter.name }}" style="text-decoration: inherit">
+                                <button type="button" class="btn btn-secondary">
+                                    {{ filter.unicode }}
+                                </button>
+                            </a>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                <span class="mx-2 chatlog__short-timestamp text-center">
+                    {{ filtered_message_data | length }} results.
                 </span>
             </div>
         </header>
@@ -27,85 +50,135 @@
         <div class="modal fade" id="filters" tabindex="-1" aria-labelledby="filters-label" aria-hidden="true">
             <div class="modal-dialog">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="filters-label">Edit filters</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">Content</div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                        <button type="button" class="btn btn-success">Save</button>
-                    </div>
+                    <form action="/change_filters" method="POST">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="filters-label">Edit filters</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <b>Currently active filters:</b>
+                            <div id="active_filters">
+                                {% for filter in filters %}
+                                    <div class="d-flex justify-content-between w-100">
+                                        <p>
+                                            :{{ filter.name }}: {{ filter.unicode }}
+                                        </p>
+                                        <input class="form-check-input" type="checkbox" name="{{ filter.name }}" checked>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <br />
+                            <b>Add new filters:</b>
+                            <div class="p-2">
+                                <small>Note: Reaction filters must be the <i>primary</i> name of a Discord emote. For example, <code>:+1:</code> will not work but <code>:thumbsup:</code> will.</small>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div class="d-flex align-items-center gap-1">
+                                    :<input type="text" class="form-control" id="filter_input" style="width: 200px">:
+                                </div>
+                                <button class="btn btn-outline-success" type="button" id="add_filter">Add</button>
+                            </div>
+                            <script>
+                                const filters = document.getElementById("active_filters")
+                                const input = document.getElementById("filter_input");
+                                const add = document.getElementById("add_filter");
+                                add.addEventListener("click", () => {
+                                    const inputValue = DOMPurify.sanitize(input.value).replaceAll(" ", "_");
+                                    if (inputValue === "") return;
+                                    const div = document.createElement("div");
+                                    div.classList.add("d-flex", "justify-content-between", "w-100");
+                                    const p = document.createElement("p");
+                                    p.innerHTML = ":" + inputValue + ":";
+                                    div.appendChild(p);
+                                    const inputField = document.createElement("input");
+                                    inputField.classList.add("form-check-input");
+                                    inputField.type = "checkbox";
+                                    inputField.checked = true;
+                                    inputField.name = inputValue;
+                                    div.appendChild(inputField);
+                                    filters.appendChild(div);
+                                    input.value = "";
+                                });
+                            </script>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="submit" class="btn btn-success">Save</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
 
-        <div id="buttons" class="p-2 col">
-            {% for filter in filters %}
-                {% if active_filter_name == filter.name %}
-                    <button type="button" class="btn btn-primary">{{ filter.unicode }}</button>
-                {% else %}
-                    <a href="/{{ filter.name }}" style="text-decoration: inherit">
-                        <button type="button" class="btn btn-secondary">
-                            {{ filter.unicode }}
-                        </button>
-                    </a>
-                {% endif %}
-            {% endfor %}
-        </div>
+        <div class="d-flex w-100 justify-content-center">
+            <div class="w-mini">
+                {% if filtered_message_data %}
+                    {% for msg in filtered_message_data %}
+                        <div class="chatlog__message-group">
+                            <div class="chatlog__message-container">
+                                <div class="chatlog__message">
+                                    <div class="chatlog__message-primary">
+                                        <div class="d-flex">
+                                            <img class="chatlog__author-pfp" src="{{ msg.author_pfp }}" />
+                                            <div>
+                                                <div class="chatlog__header">
+                                                    <span class="chatlog__author">{{ msg.author_name }}</span>
+                                                    <span class="chatlog__server-channel">
+                                                        in <strong>{{ msg.server }}</strong> → <strong>{{ msg.channel }}</strong>
+                                                    </span>
+                                                    <span class="chatlog__timestamp" title="{{ msg.timestamp.strftime('%B %d, %Y %I:%M %p') }}">
+                                                        {{ msg.timestamp.strftime("%m/%d/%Y %I:%M %p") }}
+                                                    </span>
+                                                </div>
 
-        <div class="p-4">
-            {% if filtered_message_data %}
-            {% for msg in filtered_message_data %}
-                <div class="chatlog__message-group">
-                    <div id="chatlog__message-container-{{ msg.message_id }}" class="chatlog__message-container" data-message-id="{{ msg.message_id }}">
-                        <div class="chatlog__message">
-                            <div class="chatlog__message-primary">
-                                <div class="chatlog__header">
-                                    <span class="chatlog__author">{{ msg.author_name }}</span>
+                                                <div class="chatlog__content chatlog__markdown row chatlog__markdown-preserve" id="{{ msg.message_id }}">
+                                                    <script>
+                                                        document.getElementById("{{ msg.message_id }}").innerHTML =
+                                                            DOMPurify.sanitize(marked.parse({{ msg.content | tojson }}));
+                                                    </script>
+                                                </div>
 
-                                    <span class="chatlog__server-channel">
-                                        in <strong>{{ msg.server }}</strong> &gt; <strong>{{ msg.channel }}</strong>
-                                    </span>
+                                                <div id="attachments" class="my-2">
+                                                    {% for url in msg.attachment_urls %}
+                                                        {% set ext = url.split(".")[-1].split("?")[0].lower() %}
+                                                        {% if ext in ["jpg", "jpeg", "png", "gif", "webp"] %}
+                                                            <a href="{{ url }}" target="_blank">
+                                                                <img src="{{ url }}" alt="{{ url }}" class="autoscale rounded" />
+                                                            </a>
+                                                        {% elif ext in ["mp4", "webm", "mov"] %}
+                                                            <video controls src="{{ url }}" class="autoscale rounded"></video>
+                                                        {% elif ext in ["mp3", "wav", "flac"] %}
+                                                            <audio controls src="{{ url }}" title="{{ url }}" class="rounded"></audio>
+                                                        {% else %}
+                                                            <a href="{{ url }}" target="_blank" rel="noreferrer" class="url">
+                                                                <b>View <i>.{{ ext }}</i> file uploaded by {{ msg.author_name }}:<br />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ url }}</b>
+                                                            </a>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
 
-                                    <span class="chatlog__timestamp" title="{{ msg.timestamp.strftime('%B %d, %Y %I:%M %p') }}">
-                                        {{ msg.timestamp.strftime('%m/%d/%Y %I:%M %p') }}
-                                    </span>
-                                </div>
+                                                <div class="chatlog__reaction-info">
+                                                    <span class="chatlog__reaction-count">
+                                                        {{ msg.reacted_count }} {{ active_filter_name }} reaction{{ "s" if msg.reacted_count != 1 else "" }}{% if msg.additional_reactions_present %}, with other reactions present{% endif %}
+                                                    </span>
+                                                </div>
 
-                                <div class="chatlog__content chatlog__markdown row">
-                                    <span class="chatlog__markdown-preserve">{{ msg.content }}</span>
-                                    {% if msg.has_attachments %}
-                                        {% for content in msg.probable_content %}
-                                            <iframe src="{{ content }}" class="p-3" style="width: 864px; height: 480px; background-color: black"></iframe>
-                                        {% endfor %}
-                                    {% endif %}
-                                </div>
-
-                                <div class="chatlog__reaction-info">
-                                    <span class="chatlog__reaction-count">
-                                        {{ msg.reacted_count }} filtered reaction{{ "s" if msg.reacted_count != 1 else "" }}.
-                                        {% if msg.additional_reactions_present %}Other reactions present.{% endif %}
-                                        {% if msg.has_attachments %}Attachments present.{% endif %}
-                                    </span>
-                                </div>
-
-                                <div class="chatlog__message-link">
-                                    <a href="{{ msg.probable_content[0] }}" target="_blank" class="px-3">
-                                        Try to open content →
-                                    </a>
-                                    <a href="https://discord.com/channels/{{ msg.guild_id }}/{{ msg.channel_id }}/{{ msg.message_id }}" target="_blank">
-                                        Open original message →
-                                    </a>
+                                                <div class="chatlog__message-link">
+                                                    <a href="https://discord.com/channels/{{ msg.guild_id }}/{{ msg.channel_id }}/{{ msg.message_id }}" target="_blank">
+                                                        Open original message →
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
-            {% endfor %}
-            {% else %}
-                No messages are available under the current filter settings across {{ files_loaded }} channel(s).
-            {% endif %}
+                    {% endfor %}
+                {% else %}
+                    No messages are available under the current filter settings across {{ files_loaded }} channel(s).
+                {% endif %}
+            </div>
         </div>
 
         <script
