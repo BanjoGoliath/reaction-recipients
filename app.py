@@ -172,6 +172,7 @@ def get_filtered_message_data(filter: str, files: list):
                         )
         except Exception as e:
             dbg.error(f"Malformed data searching for filter '{filter}'. Ignoring error: {e}")
+    matched_reacted_messages.sort(key=lambda x: x.timestamp)
     return matched_reacted_messages
     
 # bango land
