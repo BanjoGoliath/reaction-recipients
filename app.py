@@ -32,27 +32,24 @@ with filters_file.open("r+") as file:
         json.dump(defaults, file)
         filters = defaults
     
-data_dir = Path.cwd() / "static" / "data"
-try:
-    data_dir.mkdir(parents=True)
-    dbg.info("New data directory created under ./static/data")
-except FileExistsError:
-    dbg.debug("Data directory located and will be used under ./static/data")
+static_dir = Path.cwd() / "static"
 
 dbg.debug("Looking for compatible files.")
 json_files = []
-print(f"\n{data_dir}")
-for path in sorted(data_dir.rglob("*")):
-    spacer = len(path.relative_to(data_dir).parts) * "    "
-    if path.is_dir():
+static_subdirectories = []
+print(f"\n{static_dir}")
+for path in sorted(static_dir.rglob("*", recurse_symlinks=True)):
+    spacer = len(path.relative_to(static_dir).parts) * "    "
+    if path.is_dir() and path.name != "__do_not_remove":
         print(f"{spacer}/{path.name}")
+        static_subdirectories.append(path)
     elif path.suffix == ".json":
         print(f"{spacer}\033[0;32m{len(json_files)}\033[0m {path.name}")
         json_files.append(path)
 print()
 
 if len(json_files) == 0:
-    dbg.fatal("No .json files were found in the ./static/data directory to use for reaction-recipients.\nPlease populate ./static/data with json (and optionally directory/folder assorted) exports from DiscordChatExporter.\nImage/media folders for exports should be dropped directly into ./static")
+    dbg.fatal("No .json files were found in the ./static/ directory or children for use with reaction-recipients.\nPlease populate ./static/ with JSON exports from DiscordChatExporter, including static asset folders together with the JSON files if used.\nYou may wish to symlink the folders containing all of your exports and data into ./static/.")
     exit(1)
     
 files = []
@@ -83,11 +80,28 @@ else:
                     try:
                         files.append(json.load(file))
                     except:
-                        dbg.fatal(f"Could not read the contents of {file.name}. Aborting.")
-                        exit(1)
+                        dbg.warning(f"Could not read the contents of {file.name}. Skipping...")
             break
         except ValueError as e:
             dbg.error("Failed to parse: %s", e)
+
+
+# Static assets need to be resolved recursively too as with the JSON files on discovery
+found_asset_paths = set()
+def get_asset(asset_path: str):
+    if asset_path.startswith("http"):
+        return asset_path
+    for fap in found_asset_paths:
+        if fap[0] == asset_path:
+            return fap[1]
+    for subdir in static_subdirectories:
+        new_path = Path.joinpath(subdir, asset_path.replace("\\", "/"))
+        if new_path.exists():
+            resolved_path = str(new_path.relative_to(static_dir.parent))
+            found_asset_paths.add((asset_path, resolved_path))
+            return resolved_path
+    return asset_path
+
 
 dbg.debug(f"Loaded {len(files)} file(s). Starting Flask server.")
 
@@ -97,7 +111,7 @@ def index(filter):
     if filter is not None and filter not in map(lambda f: f["name"], filters):
         return redirect("/")
     filtered_message_data = get_filtered_message_data(filter, files) if filter is not None else []
-    return render_template("index.html", files_loaded=len(files), filters=filters, active_filter_name=filter, filtered_message_data=filtered_message_data)
+    return render_template("index.html", files_loaded=len(files), filters=filters, active_filter_name=filter, filtered_message_data=filtered_message_data, get_asset=get_asset)
 
 @app.route("/change_filters", methods=["POST"])
 def change_filters():
@@ -124,9 +138,6 @@ def try_get_emoji(code):
         return code
     return code
 
-@app.route("/<dir>/<file>") # should be fine for directory then file located items
-def static_content(dir, file):
-    return redirect(url_for("static", filename=f"{dir}/{file}"))
 
 @app.errorhandler(404)
 def file_not_found(e):

@@ -5,7 +5,7 @@ Run using:
 ```
 python -m flask run
 ```
-and follow terminal instructions to initialise the app with data. Content directories for the JSON files downloaded through the `Download assets` function go in `static/`, whereas the JSON files themselves go in `static/data/`.
+and follow terminal instructions to initialise the app with data. Your data files being the JSON (export format) and static (downloaded through the `Download assets` function) files/folders should be put into `static/` in any directory structure. The application will attempt to find them recursively. Do not touch `__do_not_remove/`.
 
 The web interface will be available on `http://localhost:5000` on successful initialisation from the terminal.
 

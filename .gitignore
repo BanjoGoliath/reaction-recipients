@@ -3,6 +3,4 @@ filters.json
 .idea
 __pycache__
 static/*
-!static/chatlog.css
-!static/404.png
-!static/none.png
+!static/__do_not_remove/

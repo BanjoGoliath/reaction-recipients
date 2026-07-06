@@ -206,6 +206,10 @@
     word-break: break-all;
 }
 
+.chatlog__content * {
+    white-space: normal;
+}
+
 .chatlog__edited-timestamp {
     margin-left: 0.15rem;
     color: #a3a6aa;
