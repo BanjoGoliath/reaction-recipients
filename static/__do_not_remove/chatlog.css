@@ -752,7 +752,8 @@ ol {
 
 .autoscale {
     max-width: 800px;
-    width: 100%;
+    max-height: 400px;
+    width: auto;
     height: auto;
 }
 
